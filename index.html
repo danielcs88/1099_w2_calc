@@ -1,335 +1,315 @@
-import { useState, useMemo } from "react";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>1099 → W-2 Salary Converter</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { background: #060e06; color: #c8e0c8; }
+    input[type=number]::-webkit-outer-spin-button,
+    input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
 
-// ─── 2025 Tax Constants ───────────────────────────────────────────────────────
-const STANDARD_DEDUCTION = { single: 15000, married: 30000, hoh: 22500 };
-const SS_WAGE_BASE = 176100;
+  <script type="text/babel">
+    const { useState, useMemo } = React;
 
-const BRACKETS = {
-  single: [
-    [0.10,  0,       11925],
-    [0.12,  11925,   48475],
-    [0.22,  48475,   103350],
-    [0.24,  103350,  197300],
-    [0.32,  197300,  250525],
-    [0.35,  250525,  626350],
-    [0.37,  626350,  Infinity],
-  ],
-  married: [
-    [0.10,  0,       23850],
-    [0.12,  23850,   96950],
-    [0.22,  96950,   206700],
-    [0.24,  206700,  394600],
-    [0.32,  394600,  501050],
-    [0.35,  501050,  751600],
-    [0.37,  751600,  Infinity],
-  ],
-  hoh: [
-    [0.10,  0,       17000],
-    [0.12,  17000,   64850],
-    [0.22,  64850,   103350],
-    [0.24,  103350,  197300],
-    [0.32,  197300,  250500],
-    [0.35,  250500,  626350],
-    [0.37,  626350,  Infinity],
-  ],
-};
+    // ─── 2025 Tax Constants ─────────────────────────────────────────────────────
+    const STANDARD_DEDUCTION = { single: 15000, married: 30000, hoh: 22500 };
+    const SS_WAGE_BASE = 176100;
 
-function federalTax(taxableIncome, filingStatus) {
-  let tax = 0;
-  for (const [rate, min, max] of BRACKETS[filingStatus]) {
-    if (taxableIncome <= min) break;
-    tax += (Math.min(taxableIncome, max) - min) * rate;
-  }
-  return tax;
-}
+    const BRACKETS = {
+      single: [
+        [0.10,  0,       11925],
+        [0.12,  11925,   48475],
+        [0.22,  48475,   103350],
+        [0.24,  103350,  197300],
+        [0.32,  197300,  250525],
+        [0.35,  250525,  626350],
+        [0.37,  626350,  Infinity],
+      ],
+      married: [
+        [0.10,  0,       23850],
+        [0.12,  23850,   96950],
+        [0.22,  96950,   206700],
+        [0.24,  206700,  394600],
+        [0.32,  394600,  501050],
+        [0.35,  501050,  751600],
+        [0.37,  751600,  Infinity],
+      ],
+      hoh: [
+        [0.10,  0,       17000],
+        [0.12,  17000,   64850],
+        [0.22,  64850,   103350],
+        [0.24,  103350,  197300],
+        [0.32,  197300,  250500],
+        [0.35,  250500,  626350],
+        [0.37,  626350,  Infinity],
+      ],
+    };
 
-function effectiveRate(tax, gross) {
-  return gross > 0 ? (tax / gross) * 100 : 0;
-}
+    function federalTax(taxableIncome, filingStatus) {
+      let tax = 0;
+      for (const [rate, min, max] of BRACKETS[filingStatus]) {
+        if (taxableIncome <= min) break;
+        tax += (Math.min(taxableIncome, max) - min) * rate;
+      }
+      return tax;
+    }
 
-// ─── 1099 Calculation ─────────────────────────────────────────────────────────
-function calc1099(annualGross, filingStatus, extraDeductions = 0) {
-  if (annualGross <= 0) return null;
-  const netEarnings = annualGross * 0.9235;
-  const ssSE = Math.min(netEarnings, SS_WAGE_BASE) * 0.124;
-  const medicareSE = netEarnings * 0.029;
-  const seTax = ssSE + medicareSE;
-  const halfSE = seTax / 2;
-  const stdDed = STANDARD_DEDUCTION[filingStatus];
-  const taxableIncome = Math.max(0, annualGross - halfSE - stdDed - extraDeductions);
-  const fedTax = federalTax(taxableIncome, filingStatus);
-  const totalTax = seTax + fedTax;
-  const takeHome = annualGross - totalTax;
-  return { seTax, fedTax, totalTax, takeHome, taxableIncome, effectiveRate: effectiveRate(totalTax, annualGross) };
-}
+    function effectiveRate(tax, gross) {
+      return gross > 0 ? (tax / gross) * 100 : 0;
+    }
 
-// ─── W-2 Calculation ──────────────────────────────────────────────────────────
-function calcW2(annualSalary, filingStatus, extraDeductions = 0) {
-  if (annualSalary <= 0) return null;
-  const ssTax = Math.min(annualSalary, SS_WAGE_BASE) * 0.062;
-  const medicareTax = annualSalary * 0.0145;
-  const ficaTax = ssTax + medicareTax;
-  const stdDed = STANDARD_DEDUCTION[filingStatus];
-  const taxableIncome = Math.max(0, annualSalary - stdDed - extraDeductions);
-  const fedTax = federalTax(taxableIncome, filingStatus);
-  const totalTax = ficaTax + fedTax;
-  const takeHome = annualSalary - totalTax;
-  return { ficaTax, fedTax, totalTax, takeHome, taxableIncome, effectiveRate: effectiveRate(totalTax, annualSalary) };
-}
+    function calcW2(annualSalary, filingStatus, extraDeductions = 0) {
+      if (annualSalary <= 0) return null;
+      const ssTax = Math.min(annualSalary, SS_WAGE_BASE) * 0.062;
+      const medicareTax = annualSalary * 0.0145;
+      const ficaTax = ssTax + medicareTax;
+      const stdDed = STANDARD_DEDUCTION[filingStatus];
+      const taxableIncome = Math.max(0, annualSalary - stdDed - extraDeductions);
+      const fedTax = federalTax(taxableIncome, filingStatus);
+      const totalTax = ficaTax + fedTax;
+      const takeHome = annualSalary - totalTax;
+      return { ficaTax, fedTax, totalTax, takeHome, taxableIncome, effectiveRate: effectiveRate(totalTax, annualSalary) };
+    }
 
-// ─── Find equivalent W-2 salary via binary search ─────────────────────────────
-function findEquivalentW2(targetTakeHome, filingStatus, extraDeductions = 0) {
-  let lo = 0, hi = targetTakeHome * 4;
-  for (let i = 0; i < 120; i++) {
-    const mid = (lo + hi) / 2;
-    const { takeHome } = calcW2(mid, filingStatus, extraDeductions) || { takeHome: 0 };
-    if (takeHome < targetTakeHome) lo = mid;
-    else hi = mid;
-  }
-  return (lo + hi) / 2;
-}
+    function findEquivalentW2(targetTakeHome, filingStatus, extraDeductions = 0) {
+      let lo = 0, hi = targetTakeHome * 4;
+      for (let i = 0; i < 120; i++) {
+        const mid = (lo + hi) / 2;
+        const { takeHome } = calcW2(mid, filingStatus, extraDeductions) || { takeHome: 0 };
+        if (takeHome < targetTakeHome) lo = mid;
+        else hi = mid;
+      }
+      return (lo + hi) / 2;
+    }
 
-// ─── Formatting ───────────────────────────────────────────────────────────────
-const fmt = (n) => n?.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }) ?? "—";
-const fmtBW = (annual) => fmt(annual / 26);
+    const fmt = (n) => n?.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }) ?? "—";
+    const fmtBW = (annual) => fmt(annual / 26);
 
-// ─── Components ───────────────────────────────────────────────────────────────
-function Input({ label, value, onChange, prefix = "$", hint }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b7a6b", fontFamily: "'DM Mono', monospace" }}>
-        {label}
-      </label>
-      <div style={{ position: "relative" }}>
-        {prefix && (
+    function Input({ label, value, onChange, prefix = "$", hint }) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b7a6b", fontFamily: "'DM Mono', monospace" }}>
+            {label}
+          </label>
+          <div style={{ position: "relative" }}>
+            {prefix && (
+              <span style={{
+                position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+                color: "#4ade80", fontFamily: "'DM Mono', monospace", fontSize: 15, pointerEvents: "none"
+              }}>{prefix}</span>
+            )}
+            <input
+              type="number"
+              value={value}
+              onChange={e => onChange(e.target.value)}
+              style={{
+                width: "100%", boxSizing: "border-box",
+                background: "#0f1a0f", border: "1px solid #1e3320", borderRadius: 6,
+                padding: prefix ? "12px 14px 12px 28px" : "12px 14px",
+                color: "#e8f5e8", fontFamily: "'DM Mono', monospace", fontSize: 15,
+                outline: "none", transition: "border-color 0.15s",
+              }}
+              onFocus={e => e.target.style.borderColor = "#4ade80"}
+              onBlur={e => e.target.style.borderColor = "#1e3320"}
+            />
+          </div>
+          {hint && <span style={{ fontSize: 11, color: "#4a5e4a", fontFamily: "'DM Mono', monospace" }}>{hint}</span>}
+        </div>
+      );
+    }
+
+    function Select({ label, value, onChange, options }) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <label style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b7a6b", fontFamily: "'DM Mono', monospace" }}>
+            {label}
+          </label>
+          <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            style={{
+              background: "#0f1a0f", border: "1px solid #1e3320", borderRadius: 6,
+              padding: "12px 14px", color: "#e8f5e8", fontFamily: "'DM Mono', monospace",
+              fontSize: 14, outline: "none", cursor: "pointer", appearance: "none",
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%234ade80' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E")`,
+              backgroundRepeat: "no-repeat", backgroundPosition: "calc(100% - 14px) center",
+              paddingRight: 36,
+            }}
+          >
+            {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </div>
+      );
+    }
+
+    function StatRow({ label, value, highlight, dimmed }) {
+      return (
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "8px 0", borderBottom: "1px solid #0d1a0d",
+        }}>
+          <span style={{ fontSize: 13, color: dimmed ? "#3a4e3a" : "#7a9a7a", fontFamily: "'DM Mono', monospace" }}>{label}</span>
           <span style={{
-            position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
-            color: "#4ade80", fontFamily: "'DM Mono', monospace", fontSize: 15, pointerEvents: "none"
-          }}>{prefix}</span>
-        )}
-        <input
-          type="number"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          style={{
-            width: "100%", boxSizing: "border-box",
-            background: "#0f1a0f", border: "1px solid #1e3320", borderRadius: 6,
-            padding: prefix ? "12px 14px 12px 28px" : "12px 14px",
-            color: "#e8f5e8", fontFamily: "'DM Mono', monospace", fontSize: 15,
-            outline: "none", transition: "border-color 0.15s",
-          }}
-          onFocus={e => e.target.style.borderColor = "#4ade80"}
-          onBlur={e => e.target.style.borderColor = "#1e3320"}
-        />
-      </div>
-      {hint && <span style={{ fontSize: 11, color: "#4a5e4a", fontFamily: "'DM Mono', monospace" }}>{hint}</span>}
-    </div>
-  );
-}
-
-function Select({ label, value, onChange, options }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <label style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "#6b7a6b", fontFamily: "'DM Mono', monospace" }}>
-        {label}
-      </label>
-      <select
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        style={{
-          background: "#0f1a0f", border: "1px solid #1e3320", borderRadius: 6,
-          padding: "12px 14px", color: "#e8f5e8", fontFamily: "'DM Mono', monospace",
-          fontSize: 14, outline: "none", cursor: "pointer", appearance: "none",
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%234ade80' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E")`,
-          backgroundRepeat: "no-repeat", backgroundPosition: "calc(100% - 14px) center",
-          paddingRight: 36,
-        }}
-      >
-        {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-      </select>
-    </div>
-  );
-}
-
-function StatRow({ label, value, highlight, dimmed }) {
-  return (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "8px 0", borderBottom: "1px solid #0d1a0d",
-    }}>
-      <span style={{ fontSize: 13, color: dimmed ? "#3a4e3a" : "#7a9a7a", fontFamily: "'DM Mono', monospace" }}>{label}</span>
-      <span style={{
-        fontSize: 14, fontFamily: "'DM Mono', monospace", fontWeight: 600,
-        color: highlight ? "#4ade80" : dimmed ? "#3a5a3a" : "#b8d4b8",
-      }}>{value}</span>
-    </div>
-  );
-}
-
-function Card({ title, emoji, children, accent }) {
-  return (
-    <div style={{
-      background: "#0b160b", border: `1px solid ${accent || "#1e3320"}`,
-      borderRadius: 10, padding: 20, flex: 1,
-    }}>
-      <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: "#4a6a4a", marginBottom: 14, fontFamily: "'DM Mono', monospace" }}>
-        {emoji} {title}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function TaxBar({ label, pct, color }) {
-  return (
-    <div style={{ marginBottom: 8 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ fontSize: 11, color: "#6b8a6b", fontFamily: "'DM Mono', monospace" }}>{label}</span>
-        <span style={{ fontSize: 11, color: "#9ab89a", fontFamily: "'DM Mono', monospace" }}>{pct.toFixed(1)}%</span>
-      </div>
-      <div style={{ background: "#0f1a0f", borderRadius: 3, height: 5, overflow: "hidden" }}>
-        <div style={{ width: `${Math.min(pct * 2, 100)}%`, background: color, height: "100%", borderRadius: 3, transition: "width 0.5s ease" }} />
-      </div>
-    </div>
-  );
-}
-
-// ─── Main App ─────────────────────────────────────────────────────────────────
-export default function App() {
-  const [biweekly1099, setBiweekly1099] = useState(5000);
-  const [filingStatus, setFilingStatus] = useState("single");
-  const [extraDeductions, setExtraDeductions] = useState(0);
-  const [showDetails, setShowDetails] = useState(false);
-
-  const annual1099 = useMemo(() => Number(biweekly1099) * 26, [biweekly1099]);
-  // 1099 take-home = gross (zero tax liability assumed)
-  const equivalentW2Annual = useMemo(() => annual1099 > 0 ? findEquivalentW2(annual1099, filingStatus, Number(extraDeductions)) : 0, [annual1099, filingStatus, extraDeductions]);
-  const employee = useMemo(() => calcW2(equivalentW2Annual, filingStatus, Number(extraDeductions)), [equivalentW2Annual, filingStatus, extraDeductions]);
-
-  const uplift = annual1099 > 0 ? ((equivalentW2Annual - annual1099) / annual1099) * 100 : 0;
-
-  return (
-    <>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&display=swap');
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { background: #060e06; color: #c8e0c8; }
-        input[type=number]::-webkit-outer-spin-button,
-        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
-      `}</style>
-
-      <div style={{ minHeight: "100vh", background: "#060e06", padding: "32px 20px", fontFamily: "'DM Mono', monospace" }}>
-        {/* Header */}
-        <div style={{ maxWidth: 760, margin: "0 auto 32px" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
-            <span style={{ fontSize: 11, letterSpacing: "0.2em", color: "#4ade80", textTransform: "uppercase" }}>Florida · 2025</span>
-            <span style={{ fontSize: 11, color: "#2a3e2a" }}>·</span>
-            <span style={{ fontSize: 11, letterSpacing: "0.1em", color: "#2e4a2e", textTransform: "uppercase" }}>No State Income Tax</span>
-          </div>
-          <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 800, color: "#e8f5e8", letterSpacing: "-0.5px", lineHeight: 1.1 }}>
-            1099 → W-2<br />
-            <span style={{ color: "#4ade80" }}>Salary Converter</span>
-          </h1>
-          <p style={{ marginTop: 10, fontSize: 12, color: "#4a6a4a", lineHeight: 1.7 }}>
-            Finds the equivalent W-2 salary that gives you the same take-home pay as your contract income.
-          </p>
+            fontSize: 14, fontFamily: "'DM Mono', monospace", fontWeight: 600,
+            color: highlight ? "#4ade80" : dimmed ? "#3a5a3a" : "#b8d4b8",
+          }}>{value}</span>
         </div>
+      );
+    }
 
-        <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
+    function Card({ title, emoji, children, accent }) {
+      return (
+        <div style={{
+          background: "#0b160b", border: `1px solid ${accent || "#1e3320"}`,
+          borderRadius: 10, padding: 20, flex: 1, minWidth: 260,
+        }}>
+          <div style={{ fontSize: 12, letterSpacing: "0.15em", textTransform: "uppercase", color: "#4a6a4a", marginBottom: 14, fontFamily: "'DM Mono', monospace" }}>
+            {emoji} {title}
+          </div>
+          {children}
+        </div>
+      );
+    }
 
-          {/* Inputs */}
-          <div style={{ background: "#0b160b", border: "1px solid #1e3320", borderRadius: 10, padding: 20 }}>
-            <div style={{ fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "#4a6a4a", marginBottom: 18 }}>⚙ Your Situation</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <Input
-                label="Biweekly 1099 Income"
-                value={biweekly1099}
-                onChange={setBiweekly1099}
-                hint={`= ${fmt(annual1099)} / year`}
-              />
-              <Select
-                label="Filing Status"
-                value={filingStatus}
-                onChange={setFilingStatus}
-                options={[["single", "Single"], ["married", "Married Filing Jointly"], ["hoh", "Head of Household"]]}
-              />
-              <div style={{ gridColumn: "1 / -1" }}>
+    function App() {
+      const [biweekly1099, setBiweekly1099] = useState(5000);
+      const [filingStatus, setFilingStatus] = useState("single");
+      const [extraDeductions, setExtraDeductions] = useState(0);
+
+      const annual1099 = useMemo(() => Number(biweekly1099) * 26, [biweekly1099]);
+      const equivalentW2Annual = useMemo(() => annual1099 > 0 ? findEquivalentW2(annual1099, filingStatus, Number(extraDeductions)) : 0, [annual1099, filingStatus, extraDeductions]);
+      const employee = useMemo(() => calcW2(equivalentW2Annual, filingStatus, Number(extraDeductions)), [equivalentW2Annual, filingStatus, extraDeductions]);
+      const uplift = annual1099 > 0 ? ((equivalentW2Annual - annual1099) / annual1099) * 100 : 0;
+
+      return (
+        <div style={{ minHeight: "100vh", background: "#060e06", padding: "32px 20px", fontFamily: "'DM Mono', monospace" }}>
+          {/* Header */}
+          <div style={{ maxWidth: 760, margin: "0 auto 32px" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
+              <span style={{ fontSize: 11, letterSpacing: "0.2em", color: "#4ade80", textTransform: "uppercase" }}>Florida · 2025</span>
+              <span style={{ fontSize: 11, color: "#2a3e2a" }}>·</span>
+              <span style={{ fontSize: 11, letterSpacing: "0.1em", color: "#2e4a2e", textTransform: "uppercase" }}>No State Income Tax</span>
+            </div>
+            <h1 style={{ fontFamily: "'Syne', sans-serif", fontSize: 28, fontWeight: 800, color: "#e8f5e8", letterSpacing: "-0.5px", lineHeight: 1.1 }}>
+              1099 → W-2<br />
+              <span style={{ color: "#4ade80" }}>Salary Converter</span>
+            </h1>
+            <p style={{ marginTop: 10, fontSize: 12, color: "#4a6a4a", lineHeight: 1.7 }}>
+              Finds the equivalent W-2 salary that gives you the same take-home pay as your contract income.
+            </p>
+          </div>
+
+          <div style={{ maxWidth: 760, margin: "0 auto", display: "flex", flexDirection: "column", gap: 20 }}>
+
+            {/* Inputs */}
+            <div style={{ background: "#0b160b", border: "1px solid #1e3320", borderRadius: 10, padding: 20 }}>
+              <div style={{ fontSize: 11, letterSpacing: "0.15em", textTransform: "uppercase", color: "#4a6a4a", marginBottom: 18 }}>⚙ Your Situation</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <Input
-                  label="Additional Deductions (optional)"
-                  value={extraDeductions}
-                  onChange={setExtraDeductions}
-                  hint="e.g. SEP-IRA contributions, health insurance premiums, business expenses"
+                  label="Biweekly 1099 Income"
+                  value={biweekly1099}
+                  onChange={setBiweekly1099}
+                  hint={`= ${fmt(annual1099)} / year`}
                 />
+                <Select
+                  label="Filing Status"
+                  value={filingStatus}
+                  onChange={setFilingStatus}
+                  options={[["single", "Single"], ["married", "Married Filing Jointly"], ["hoh", "Head of Household"]]}
+                />
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <Input
+                    label="Additional Deductions (optional)"
+                    value={extraDeductions}
+                    onChange={setExtraDeductions}
+                    hint="e.g. SEP-IRA contributions, health insurance premiums, business expenses"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Hero Result */}
-          {annual1099 > 0 && employee && (
-            <div style={{
-              background: "linear-gradient(135deg, #0d2010 0%, #091409 100%)",
-              border: "1px solid #2a5230", borderRadius: 10, padding: 24,
-              textAlign: "center", position: "relative", overflow: "hidden",
-            }}>
+            {/* Hero Result */}
+            {annual1099 > 0 && employee && (
               <div style={{
-                position: "absolute", top: -40, right: -40, width: 180, height: 180,
-                background: "radial-gradient(circle, rgba(74,222,128,0.06) 0%, transparent 70%)",
-                borderRadius: "50%"
-              }} />
-              <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#4ade80", marginBottom: 10 }}>
-                Equivalent W-2 Salary
-              </div>
-              <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 48, fontWeight: 800, color: "#4ade80", letterSpacing: "-1px" }}>
-                {fmt(equivalentW2Annual)}
-              </div>
-              <div style={{ fontSize: 14, color: "#6b9a6b", marginTop: 4 }}>
-                {fmtBW(equivalentW2Annual)} <span style={{ color: "#3a5e3a" }}>biweekly</span>
-              </div>
-              <div style={{
-                display: "inline-flex", alignItems: "center", gap: 6, marginTop: 16,
-                background: "#0f1a0f", border: "1px solid #1e3820", borderRadius: 20, padding: "6px 14px"
+                background: "linear-gradient(135deg, #0d2010 0%, #091409 100%)",
+                border: "1px solid #2a5230", borderRadius: 10, padding: 24,
+                textAlign: "center", position: "relative", overflow: "hidden",
               }}>
-                <span style={{ fontSize: 12, color: "#6b9a6b" }}>That's</span>
-                <span style={{ fontSize: 13, color: "#fbbf24", fontWeight: 600 }}>+{uplift.toFixed(1)}%</span>
-                <span style={{ fontSize: 12, color: "#6b9a6b" }}>more than your 1099 gross</span>
+                <div style={{
+                  position: "absolute", top: -40, right: -40, width: 180, height: 180,
+                  background: "radial-gradient(circle, rgba(74,222,128,0.06) 0%, transparent 70%)",
+                  borderRadius: "50%"
+                }} />
+                <div style={{ fontSize: 11, letterSpacing: "0.2em", textTransform: "uppercase", color: "#4ade80", marginBottom: 10 }}>
+                  Equivalent W-2 Salary
+                </div>
+                <div style={{ fontFamily: "'Syne', sans-serif", fontSize: 48, fontWeight: 800, color: "#4ade80", letterSpacing: "-1px" }}>
+                  {fmt(equivalentW2Annual)}
+                </div>
+                <div style={{ fontSize: 14, color: "#6b9a6b", marginTop: 4 }}>
+                  {fmtBW(equivalentW2Annual)} <span style={{ color: "#3a5e3a" }}>biweekly</span>
+                </div>
+                <div style={{
+                  display: "inline-flex", alignItems: "center", gap: 6, marginTop: 16,
+                  background: "#0f1a0f", border: "1px solid #1e3820", borderRadius: 20, padding: "6px 14px"
+                }}>
+                  <span style={{ fontSize: 12, color: "#6b9a6b" }}>That's</span>
+                  <span style={{ fontSize: 13, color: "#fbbf24", fontWeight: 600 }}>+{uplift.toFixed(1)}%</span>
+                  <span style={{ fontSize: 12, color: "#6b9a6b" }}>more than your 1099 gross</span>
+                </div>
               </div>
+            )}
+
+            {/* Side by side breakdown */}
+            {annual1099 > 0 && employee && (
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                <Card title="Your 1099 Contract" emoji="📋">
+                  <StatRow label="Annual gross" value={fmt(annual1099)} />
+                  <StatRow label="Biweekly gross" value={fmtBW(annual1099)} />
+                  <StatRow label="Tax liability" value="$0" dimmed />
+                  <StatRow label="Annual take-home" value={fmt(annual1099)} highlight />
+                  <StatRow label="Biweekly take-home" value={fmtBW(annual1099)} highlight />
+                </Card>
+                <Card title="Equivalent W-2 Employee" emoji="🏢" accent="#2a5230">
+                  <StatRow label="Annual salary" value={fmt(equivalentW2Annual)} />
+                  <StatRow label="Employee FICA" value={`−${fmt(employee.ficaTax)}`} />
+                  <StatRow label="Federal income tax" value={`−${fmt(employee.fedTax)}`} />
+                  <StatRow label="State income tax" value="$0" dimmed />
+                  <StatRow label="Effective tax rate" value={`${employee.effectiveRate.toFixed(1)}%`} />
+                  <StatRow label="Annual take-home" value={fmt(employee.takeHome)} highlight />
+                  <StatRow label="Biweekly take-home" value={fmtBW(employee.takeHome)} highlight />
+                </Card>
+              </div>
+            )}
+
+            {/* Footnotes */}
+            <div style={{ fontSize: 11, color: "#2e4a2e", lineHeight: 1.8, padding: "0 4px" }}>
+              <div>• 1099 income is treated as full take-home (tax liability = $0 for comparison purposes).</div>
+              <div>• W-2 calculation uses 2025 federal tax brackets, standard deductions, and employee FICA (6.2% SS + 1.45% Medicare).</div>
+              <div>• Florida has no state income tax.</div>
+              <div>• Does not account for benefits (health insurance, 401k match, PTO) — factor those in for a full comparison.</div>
+              <div>• Estimates only. Consult a CPA for your specific situation.</div>
             </div>
-          )}
-
-          {/* Side by side breakdown */}
-          {annual1099 > 0 && employee && (
-            <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-              <Card title="Your 1099 Contract" emoji="📋">
-                <StatRow label="Annual gross" value={fmt(annual1099)} />
-                <StatRow label="Biweekly gross" value={fmtBW(annual1099)} />
-                <StatRow label="Tax liability" value="$0" dimmed />
-                <StatRow label="Annual take-home" value={fmt(annual1099)} highlight />
-                <StatRow label="Biweekly take-home" value={fmtBW(annual1099)} highlight />
-              </Card>
-
-              <Card title="Equivalent W-2 Employee" emoji="🏢" accent="#2a5230">
-                <StatRow label="Annual salary" value={fmt(equivalentW2Annual)} />
-                <StatRow label="Employee FICA" value={`−${fmt(employee.ficaTax)}`} />
-                <StatRow label="Federal income tax" value={`−${fmt(employee.fedTax)}`} />
-                <StatRow label="State income tax" value="$0" dimmed />
-                <StatRow label="Effective tax rate" value={`${employee.effectiveRate.toFixed(1)}%`} />
-                <StatRow label="Annual take-home" value={fmt(employee.takeHome)} highlight />
-                <StatRow label="Biweekly take-home" value={fmtBW(employee.takeHome)} highlight />
-              </Card>
-            </div>
-          )}
-
-          {/* Footnotes */}
-          <div style={{ fontSize: 11, color: "#2e4a2e", lineHeight: 1.8, padding: "0 4px" }}>
-            <div>• 1099 income is treated as full take-home (tax liability = $0 for comparison purposes).</div>
-            <div>• W-2 calculation uses 2025 federal tax brackets, standard deductions, and employee FICA (6.2% SS + 1.45% Medicare).</div>
-            <div>• Florida has no state income tax.</div>
-            <div>• Does not account for benefits (health insurance, 401k match, PTO) — factor those in for a full comparison.</div>
-            <div>• Estimates only. Consult a CPA for your specific situation.</div>
           </div>
         </div>
-      </div>
-    </>
-  );
-}
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>
