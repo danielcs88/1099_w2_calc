@@ -13,7 +13,6 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    /* ── Dark theme (default) ── */
     :root {
       --bg:          #060e06;
       --bg-card:     #0b160b;
@@ -31,8 +30,7 @@
       --accent:      #4ade80;
       --accent-soft: #3a5e3a;
       --gold:        #fbbf24;
-      --hero-bg:     linear-gradient(135deg, #0d2010 0%, #091409 100%);
-      --hero-border: #2a5230;
+      --hero-b:      #2a5230;
       --hero-pill:   #0f1a0f;
       --hero-pill-b: #1e3820;
       --row-sep:     #0d1a0d;
@@ -40,7 +38,6 @@
       --toggle-b:    #1e3320;
     }
 
-    /* ── Light theme ── */
     [data-theme="light"] {
       --bg:          #f0f7f0;
       --bg-card:     #ffffff;
@@ -58,8 +55,7 @@
       --accent:      #16a34a;
       --accent-soft: #86efac;
       --gold:        #b45309;
-      --hero-bg:     linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%);
-      --hero-border: #6abf7a;
+      --hero-b:      #6abf7a;
       --hero-pill:   #f0fdf4;
       --hero-pill-b: #bbf7d0;
       --row-sep:     #e8f5e8;
@@ -82,10 +78,11 @@
       grid-template-columns: 1fr 1fr;
       gap: 16px;
     }
+
     @media (max-width: 540px) {
-      .input-grid { grid-template-columns: 1fr; }
-      .hero-amount { font-size: 34px !important; }
-      .cards-row { flex-direction: column; }
+      .input-grid   { grid-template-columns: 1fr; }
+      .hero-amount  { font-size: 34px !important; }
+      .cards-row    { flex-direction: column; }
     }
 
     .theme-btn {
@@ -114,9 +111,9 @@
     const { useState, useMemo, useEffect } = React;
 
     // ── Tax constants ────────────────────────────────────────────────────────────
-    const STD_DED   = { single: 15000, married: 30000, hoh: 22500 };
-    const SS_BASE   = 176100;
-    const BRACKETS  = {
+    const STD_DED  = { single: 15000, married: 30000, hoh: 22500 };
+    const SS_BASE  = 176100;
+    const BRACKETS = {
       single:  [[0.10,0,11925],[0.12,11925,48475],[0.22,48475,103350],[0.24,103350,197300],[0.32,197300,250525],[0.35,250525,626350],[0.37,626350,Infinity]],
       married: [[0.10,0,23850],[0.12,23850,96950],[0.22,96950,206700],[0.24,206700,394600],[0.32,394600,501050],[0.35,501050,751600],[0.37,751600,Infinity]],
       hoh:     [[0.10,0,17000],[0.12,17000,64850],[0.22,64850,103350],[0.24,103350,197300],[0.32,197300,250500],[0.35,250500,626350],[0.37,626350,Infinity]],
@@ -124,48 +121,67 @@
 
     function fedTax(income, fs) {
       let t = 0;
-      for (const [r,lo,hi] of BRACKETS[fs]) {
+      for (const [r, lo, hi] of BRACKETS[fs]) {
         if (income <= lo) break;
         t += (Math.min(income, hi) - lo) * r;
       }
       return t;
     }
 
-    function calcW2(salary, fs, extra = 0) {
+    function calcW2(salary, fs, extra) {
+      extra = extra || 0;
       if (salary <= 0) return null;
       const fica    = Math.min(salary, SS_BASE) * 0.062 + salary * 0.0145;
       const taxable = Math.max(0, salary - STD_DED[fs] - extra);
       const fed     = fedTax(taxable, fs);
       const total   = fica + fed;
-      return { fica, fed, total, takeHome: salary - total, rate: (total / salary) * 100 };
+      return { fica: fica, fed: fed, total: total, takeHome: salary - total, rate: (total / salary) * 100 };
     }
 
-    function solveW2(target, fs, extra = 0) {
-      let lo = 0, hi = target * 4;
-      for (let i = 0; i < 120; i++) {
-        const mid = (lo + hi) / 2;
-        const res = calcW2(mid, fs, extra);
-        (res && res.takeHome < target ? lo : hi) = mid;
+    function solveW2(target, fs, extra) {
+      extra = extra || 0;
+      var lo = 0;
+      var hi = target * 4;
+      for (var i = 0; i < 120; i++) {
+        var mid = (lo + hi) / 2;
+        var res = calcW2(mid, fs, extra);
+        if (res && res.takeHome < target) {
+          lo = mid;
+        } else {
+          hi = mid;
+        }
       }
       return (lo + hi) / 2;
     }
 
-    const fmt   = n => n?.toLocaleString("en-US",{style:"currency",currency:"USD",maximumFractionDigits:0}) ?? "—";
-    const fmtBW = a => fmt(a / 26);
+    const fmt   = function(n) { return n != null ? n.toLocaleString("en-US", { style:"currency", currency:"USD", maximumFractionDigits:0 }) : "—"; };
+    const fmtBW = function(a) { return fmt(a / 26); };
 
-    // ── Sub-components ───────────────────────────────────────────────────────────
-    function NumInput({ label, value, onChange, hint }) {
+    // ── Components ───────────────────────────────────────────────────────────────
+    function NumInput(props) {
+      const label    = props.label;
+      const value    = props.value;
+      const onChange = props.onChange;
+      const hint     = props.hint;
       const [focus, setFocus] = useState(false);
       return (
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           <label style={{fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"var(--text-label)",fontFamily:"'DM Mono',monospace"}}>{label}</label>
           <div style={{position:"relative"}}>
             <span style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",color:"var(--accent)",fontFamily:"'DM Mono',monospace",fontSize:15,pointerEvents:"none"}}>$</span>
-            <input type="number" value={value}
-              onChange={e => onChange(e.target.value)}
-              onFocus={() => setFocus(true)}
-              onBlur={() => setFocus(false)}
-              style={{width:"100%",background:"var(--bg-input)",border:`1px solid ${focus?"var(--accent)":"var(--border)"}`,borderRadius:6,padding:"12px 14px 12px 28px",color:"var(--text-head)",fontFamily:"'DM Mono',monospace",fontSize:15,outline:"none",transition:"border-color 0.15s"}}
+            <input
+              type="number"
+              value={value}
+              onChange={function(e){ onChange(e.target.value); }}
+              onFocus={function(){ setFocus(true); }}
+              onBlur={function(){ setFocus(false); }}
+              style={{
+                width:"100%", background:"var(--bg-input)",
+                border: focus ? "1px solid var(--accent)" : "1px solid var(--border)",
+                borderRadius:6, padding:"12px 14px 12px 28px",
+                color:"var(--text-head)", fontFamily:"'DM Mono',monospace",
+                fontSize:15, outline:"none", transition:"border-color 0.15s",
+              }}
             />
           </div>
           {hint && <span style={{fontSize:11,color:"var(--text-hint)",fontFamily:"'DM Mono',monospace"}}>{hint}</span>}
@@ -173,24 +189,37 @@
       );
     }
 
-    function SelInput({ label, value, onChange, options }) {
+    function SelInput(props) {
+      const label    = props.label;
+      const value    = props.value;
+      const onChange = props.onChange;
+      const options  = props.options;
       return (
         <div style={{display:"flex",flexDirection:"column",gap:6}}>
           <label style={{fontSize:11,letterSpacing:"0.12em",textTransform:"uppercase",color:"var(--text-label)",fontFamily:"'DM Mono',monospace"}}>{label}</label>
-          <select value={value} onChange={e => onChange(e.target.value)} style={{
-            background:"var(--bg-input)",border:"1px solid var(--border)",borderRadius:6,
-            padding:"12px 36px 12px 14px",color:"var(--text-head)",fontFamily:"'DM Mono',monospace",
-            fontSize:14,outline:"none",cursor:"pointer",appearance:"none",
-            backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%234ade80' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E")`,
-            backgroundRepeat:"no-repeat",backgroundPosition:"calc(100% - 14px) center",
-          }}>
-            {options.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+          <select
+            value={value}
+            onChange={function(e){ onChange(e.target.value); }}
+            style={{
+              background:"var(--bg-input)", border:"1px solid var(--border)",
+              borderRadius:6, padding:"12px 36px 12px 14px",
+              color:"var(--text-head)", fontFamily:"'DM Mono',monospace",
+              fontSize:14, outline:"none", cursor:"pointer", appearance:"none",
+              backgroundImage:"url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%234ade80' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E\")",
+              backgroundRepeat:"no-repeat", backgroundPosition:"calc(100% - 14px) center",
+            }}
+          >
+            {options.map(function(opt){ return <option key={opt[0]} value={opt[0]}>{opt[1]}</option>; })}
           </select>
         </div>
       );
     }
 
-    function Row({ label, value, highlight, dimmed }) {
+    function Row(props) {
+      const label     = props.label;
+      const value     = props.value;
+      const highlight = props.highlight;
+      const dimmed    = props.dimmed;
       return (
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid var(--row-sep)"}}>
           <span style={{fontSize:13,color:dimmed?"var(--text-dim)":"var(--text-muted)",fontFamily:"'DM Mono',monospace"}}>{label}</span>
@@ -199,35 +228,37 @@
       );
     }
 
-    function Card({ title, emoji, accent, children }) {
+    function Card(props) {
+      const title  = props.title;
+      const emoji  = props.emoji;
+      const accent = props.accent;
       return (
-        <div style={{background:"var(--bg-card)",border:`1px solid ${accent||"var(--border)"}`,borderRadius:10,padding:20,flex:1,minWidth:260}}>
+        <div style={{background:"var(--bg-card)",border:"1px solid " + (accent || "var(--border)"),borderRadius:10,padding:20,flex:1,minWidth:260}}>
           <div style={{fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:"var(--text-sect)",marginBottom:14,fontFamily:"'DM Mono',monospace"}}>{emoji} {title}</div>
-          {children}
+          {props.children}
         </div>
       );
     }
 
-    // ── App ──────────────────────────────────────────────────────────────────────
+    // ── Main App ─────────────────────────────────────────────────────────────────
     function App() {
       const [biweekly, setBiweekly] = useState(5000);
       const [filing,   setFiling]   = useState("single");
       const [extra,    setExtra]    = useState(0);
       const [dark,     setDark]     = useState(true);
 
-      useEffect(() => {
+      useEffect(function() {
         document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
       }, [dark]);
 
-      const annual   = useMemo(() => Number(biweekly) * 26, [biweekly]);
-      const w2Annual = useMemo(() => annual > 0 ? solveW2(annual, filing, Number(extra)) : 0, [annual, filing, extra]);
-      const emp      = useMemo(() => calcW2(w2Annual, filing, Number(extra)), [w2Annual, filing, extra]);
+      const annual   = useMemo(function(){ return Number(biweekly) * 26; }, [biweekly]);
+      const w2Annual = useMemo(function(){ return annual > 0 ? solveW2(annual, filing, Number(extra)) : 0; }, [annual, filing, extra]);
+      const emp      = useMemo(function(){ return calcW2(w2Annual, filing, Number(extra)); }, [w2Annual, filing, extra]);
       const uplift   = annual > 0 ? ((w2Annual - annual) / annual) * 100 : 0;
 
       return (
         <div style={{minHeight:"100vh",background:"var(--bg)",padding:"32px 20px",fontFamily:"'DM Mono',monospace",transition:"background 0.25s"}}>
 
-          {/* ── Header ── */}
           <div style={{maxWidth:760,margin:"0 auto 32px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
               <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap"}}>
@@ -235,7 +266,7 @@
                 <span style={{fontSize:11,color:"var(--border)"}}>·</span>
                 <span style={{fontSize:11,letterSpacing:"0.1em",color:"var(--text-sect)",textTransform:"uppercase"}}>No State Income Tax</span>
               </div>
-              <button className="theme-btn" onClick={() => setDark(d => !d)}>
+              <button className="theme-btn" onClick={function(){ setDark(function(d){ return !d; }); }}>
                 <span style={{fontSize:15}}>{dark ? "☀️" : "🌙"}</span>
                 {dark ? "Light" : "Dark"}
               </button>
@@ -250,11 +281,10 @@
 
           <div style={{maxWidth:760,margin:"0 auto",display:"flex",flexDirection:"column",gap:20}}>
 
-            {/* ── Inputs ── */}
             <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:10,padding:20}}>
               <div style={{fontSize:11,letterSpacing:"0.15em",textTransform:"uppercase",color:"var(--text-sect)",marginBottom:18}}>⚙ Your Situation</div>
               <div className="input-grid">
-                <NumInput label="Biweekly 1099 Income" value={biweekly} onChange={setBiweekly} hint={`= ${fmt(annual)} / year`} />
+                <NumInput label="Biweekly 1099 Income" value={biweekly} onChange={setBiweekly} hint={"= " + fmt(annual) + " / year"} />
                 <SelInput label="Filing Status" value={filing} onChange={setFiling}
                   options={[["single","Single"],["married","Married Filing Jointly"],["hoh","Head of Household"]]} />
                 <div style={{gridColumn:"1 / -1"}}>
@@ -264,9 +294,8 @@
               </div>
             </div>
 
-            {/* ── Hero result ── */}
             {annual > 0 && emp && (
-              <div style={{background:"var(--hero-bg)",border:"1px solid var(--hero-border)",borderRadius:10,padding:24,textAlign:"center",position:"relative",overflow:"hidden"}}>
+              <div style={{background: dark ? "linear-gradient(135deg,#0d2010 0%,#091409 100%)" : "linear-gradient(135deg,#dcfce7 0%,#f0fdf4 100%)",border:"1px solid var(--hero-b)",borderRadius:10,padding:24,textAlign:"center",position:"relative",overflow:"hidden"}}>
                 <div style={{position:"absolute",top:-40,right:-40,width:180,height:180,background:"radial-gradient(circle,rgba(74,222,128,0.07) 0%,transparent 70%)",borderRadius:"50%"}} />
                 <div style={{fontSize:11,letterSpacing:"0.2em",textTransform:"uppercase",color:"var(--accent)",marginBottom:10}}>Equivalent W-2 Salary</div>
                 <div className="hero-amount" style={{fontFamily:"'Syne',sans-serif",fontSize:48,fontWeight:800,color:"var(--accent)",letterSpacing:"-1px"}}>
@@ -276,42 +305,40 @@
                   {fmtBW(w2Annual)} <span style={{color:"var(--accent-soft)"}}>biweekly</span>
                 </div>
                 <div style={{display:"inline-flex",alignItems:"center",gap:6,marginTop:16,background:"var(--hero-pill)",border:"1px solid var(--hero-pill-b)",borderRadius:20,padding:"6px 14px"}}>
-                  <span style={{fontSize:12,color:"var(--text-muted)"}}>That's</span>
-                  <span style={{fontSize:13,color:"var(--gold)",fontWeight:600}}>+{uplift.toFixed(1)}%</span>
+                  <span style={{fontSize:12,color:"var(--text-muted)"}}>{"That's"}</span>
+                  <span style={{fontSize:13,color:"var(--gold)",fontWeight:600}}>{"+" + uplift.toFixed(1) + "%"}</span>
                   <span style={{fontSize:12,color:"var(--text-muted)"}}>more than your 1099 gross</span>
                 </div>
               </div>
             )}
 
-            {/* ── Breakdown cards ── */}
             {annual > 0 && emp && (
               <div className="cards-row" style={{display:"flex",gap:16,flexWrap:"wrap"}}>
                 <Card title="Your 1099 Contract" emoji="📋">
                   <Row label="Annual gross"       value={fmt(annual)} />
                   <Row label="Biweekly gross"     value={fmtBW(annual)} />
-                  <Row label="Tax liability"      value="$0" dimmed />
-                  <Row label="Annual take-home"   value={fmt(annual)} highlight />
-                  <Row label="Biweekly take-home" value={fmtBW(annual)} highlight />
+                  <Row label="Tax liability"      value="$0" dimmed={true} />
+                  <Row label="Annual take-home"   value={fmt(annual)} highlight={true} />
+                  <Row label="Biweekly take-home" value={fmtBW(annual)} highlight={true} />
                 </Card>
                 <Card title="Equivalent W-2 Employee" emoji="🏢" accent="var(--border-w2)">
                   <Row label="Annual salary"      value={fmt(w2Annual)} />
-                  <Row label="Employee FICA"      value={`−${fmt(emp.fica)}`} />
-                  <Row label="Federal income tax" value={`−${fmt(emp.fed)}`} />
-                  <Row label="State income tax"   value="$0" dimmed />
-                  <Row label="Effective tax rate" value={`${emp.rate.toFixed(1)}%`} />
-                  <Row label="Annual take-home"   value={fmt(emp.takeHome)} highlight />
-                  <Row label="Biweekly take-home" value={fmtBW(emp.takeHome)} highlight />
+                  <Row label="Employee FICA"      value={"−" + fmt(emp.fica)} />
+                  <Row label="Federal income tax" value={"−" + fmt(emp.fed)} />
+                  <Row label="State income tax"   value="$0" dimmed={true} />
+                  <Row label="Effective tax rate" value={emp.rate.toFixed(1) + "%"} />
+                  <Row label="Annual take-home"   value={fmt(emp.takeHome)} highlight={true} />
+                  <Row label="Biweekly take-home" value={fmtBW(emp.takeHome)} highlight={true} />
                 </Card>
               </div>
             )}
 
-            {/* ── Footnotes ── */}
             <div style={{fontSize:11,color:"var(--text-note)",lineHeight:1.8,padding:"0 4px"}}>
-              <div>• 1099 income is treated as full take-home (tax liability = $0 for comparison purposes).</div>
-              <div>• W-2 calculation uses 2025 federal tax brackets, standard deductions, and employee FICA (6.2% SS + 1.45% Medicare).</div>
-              <div>• Florida has no state income tax.</div>
-              <div>• Does not account for benefits (health insurance, 401k match, PTO) — factor those in for a full comparison.</div>
-              <div>• Estimates only. Consult a CPA for your specific situation.</div>
+              <div>{"• 1099 income is treated as full take-home (tax liability = $0 for comparison purposes)."}</div>
+              <div>{"• W-2 calculation uses 2025 federal tax brackets, standard deductions, and employee FICA (6.2% SS + 1.45% Medicare)."}</div>
+              <div>{"• Florida has no state income tax."}</div>
+              <div>{"• Does not account for benefits (health insurance, 401k match, PTO) — factor those in for a full comparison."}</div>
+              <div>{"• Estimates only. Consult a CPA for your specific situation."}</div>
             </div>
           </div>
         </div>
